@@ -1,0 +1,6 @@
+{
+  "name": "Cyberpunk Portfolio",
+  "description": "A personal portfolio hub with a cyberpunk aesthetic and expanding cards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
