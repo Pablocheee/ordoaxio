@@ -64,19 +64,23 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
         style={{ background: `radial-gradient(circle at center, ${accentColor} 0%, transparent 70%)` }}
       />
       
-      <div className="relative z-50 flex flex-col h-full p-4 md:py-12 md:px-16 lg:px-20 skew-x-0 md:skew-x-12 text-white">
-        <div className="min-w-[260px] md:min-w-[320px] skew-x-0 md:-skew-x-12 origin-left">
-          <div className="flex items-center justify-between">
-            <h2 className={`${titleStyle} text-lg md:text-2xl text-zinc-100 whitespace-nowrap overflow-hidden text-ellipsis transition-shadow duration-200 ease-out`} style={{ textShadow: isActive ? `0 0 15px ${accentColor}80` : 'none' }}>
-              {title}
-            </h2>
+      <div className="relative z-50 flex flex-col h-full p-4 md:py-12 md:px-16 lg:px-20 skew-x-0 md:skew-x-12 text-white antialiased">
+        <div className="min-w-[260px] md:min-w-[320px] skew-x-0 md:-skew-x-12 origin-left pl-2 md:pl-8 lg:pl-12">
+          <div className="transform-gpu backface-hidden antialiased will-change-transform w-max" style={{ transform: 'translateZ(0)' }}>
+            <div className="flex items-center justify-between">
+              <h2 className={`${titleStyle} text-lg md:text-2xl text-zinc-100 whitespace-nowrap transition-shadow duration-200 ease-out`} style={{ textShadow: isActive ? `0 0 15px ${accentColor}80` : 'none' }}>
+                {title}
+              </h2>
+            </div>
           </div>
         </div>
           
-        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[80%] pl-0 md:pl-4 lg:pl-6 skew-x-0 md:-skew-x-12 origin-left">
-          <p className="font-mono text-[11px] md:text-xs tracking-wide text-zinc-300 uppercase leading-relaxed line-clamp-3 md:line-clamp-none">
-            {description}
-          </p>
+        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[70%] pl-0 md:pl-4 lg:pl-6 skew-x-0 md:-skew-x-12 origin-left">
+          <div className="transform-gpu backface-hidden antialiased will-change-transform w-[220px] md:w-[260px]" style={{ transform: 'translateZ(0)' }}>
+            <p className="font-mono text-[11px] md:text-xs tracking-wide text-zinc-300 uppercase leading-snug line-clamp-3 md:line-clamp-none">
+              {description}
+            </p>
+          </div>
         </div>
       </div>
     </motion.a>
