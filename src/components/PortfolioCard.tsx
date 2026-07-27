@@ -75,7 +75,7 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
           </div>
         </div>
           
-        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[70%] pl-0 md:pl-4 lg:pl-6 skew-x-0 md:-skew-x-12 origin-left">
+        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[70%] pl-2 md:pl-8 lg:pl-12 skew-x-0 md:-skew-x-12 origin-left">
           <div className="transform-gpu backface-hidden antialiased will-change-transform w-[220px] md:w-[260px]" style={{ transform: 'translateZ(0)' }}>
             <p className="font-mono text-[11px] md:text-xs tracking-wide text-zinc-300 uppercase leading-snug line-clamp-3 md:line-clamp-none">
               {description}
