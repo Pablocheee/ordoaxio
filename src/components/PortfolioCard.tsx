@@ -49,6 +49,8 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
       {/* Background Image Container */}
       <div className="absolute inset-0 md:inset-[-25%] z-0 skew-x-0 md:skew-x-12 overflow-hidden pointer-events-none">
         <div 
+          role="img"
+          aria-label={`Скриншот проекта: ${title}`}
           className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-700 ${isActive ? 'scale-110' : ''}`}
           style={{ backgroundImage: bgImage }}
         />
@@ -64,14 +66,14 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
         style={{ background: `radial-gradient(circle at center, ${accentColor} 0%, transparent 70%)` }}
       />
       
-      <div className="relative z-50 flex flex-col h-full p-4 md:py-12 md:px-16 lg:px-20 skew-x-0 md:skew-x-12 text-white antialiased">
+      <article className="relative z-50 flex flex-col h-full p-4 md:py-12 md:px-16 lg:px-20 skew-x-0 md:skew-x-12 text-white antialiased">
         <div className="min-w-[260px] md:min-w-[320px] skew-x-0 md:-skew-x-12 origin-left pl-2 md:pl-8 lg:pl-12">
           <div className="transform-gpu backface-hidden antialiased will-change-transform w-max" style={{ transform: 'translateZ(0)' }}>
-            <div className="flex items-center justify-between">
+            <header className="flex items-center justify-between">
               <h2 className={`${titleStyle} text-lg md:text-2xl text-zinc-100 whitespace-nowrap transition-shadow duration-200 ease-out`} style={{ textShadow: isActive ? `0 0 15px ${accentColor}80` : 'none' }}>
                 {title}
               </h2>
-            </div>
+            </header>
           </div>
         </div>
           
@@ -82,7 +84,7 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
             </p>
           </div>
         </div>
-      </div>
+      </article>
     </motion.a>
   );
 }
