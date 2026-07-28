@@ -61,24 +61,56 @@ As soon as the client agrees and leaves their contact details, as the last line 
       
       const start = Date.now();
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: [
-            ...formattedHistory,
-            { role: 'user', parts: [{ text: latestMessage }] }
-        ],
-        config: {
-          systemInstruction,
+      let replyText = "";
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: [
+              ...formattedHistory,
+              { role: 'user', parts: [{ text: latestMessage }] }
+          ],
+          config: {
+            systemInstruction,
+          }
+        });
+        replyText = response.text || "";
+      } catch (geminiError) {
+        console.error("Gemini API failed, falling back to Groq:", geminiError);
+        const groqApiKey = "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";
+        const groqMessages = [
+          { role: "system", content: systemInstruction },
+          ...messages.slice(0, -1).map((m: any) => ({
+            role: m.role === 'ai' ? 'assistant' : 'user',
+            content: m.text
+          })),
+          { role: 'user', content: latestMessage }
+        ];
+        
+        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${groqApiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "llama3-70b-8192",
+            messages: groqMessages
+          })
+        });
+
+        if (!groqResponse.ok) {
+          throw new Error(`Groq API also failed: ${groqResponse.statusText}`);
         }
-      });
+
+        const groqData = await groqResponse.json();
+        replyText = groqData.choices?.[0]?.message?.content || "";
+      }
       
       const elapsed = Date.now() - start;
       const waitTime = Math.max(0, 3000 - elapsed);
       if (waitTime > 0) {
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-      
-      let replyText = response.text || "";
       
       // Check for [LEAD_CAPTURED: ...]
       const leadRegex = /\[LEAD_CAPTURED:\s*(.*?)\]/i;
