@@ -162,10 +162,18 @@ As soon as the client agrees and leaves their contact details, as the last line 
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    const fs = await import('fs');
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    } else {
+      console.warn("Production build 'dist' folder not found. API routes are still active.");
+      app.get('*', (req, res) => {
+        res.status(404).json({ error: "Frontend build not found. Run 'npm run build'." });
+      });
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {
