@@ -133,6 +133,7 @@ export default function App() {
             </svg>
           </a>
           <button 
+            data-lang-toggle="true"
             onClick={handleLanguageToggle}
             className="flex items-center text-white/50 hover:text-white transition-all duration-300 group cursor-pointer"
           >
@@ -206,7 +207,10 @@ export default function App() {
       )}
 
       {/* Retro-Futuristic AI Assistant */}
-      <OrdoAxioAi currentLang={currentLang} isGlitching={isGlitching} />
+      <OrdoAxioAi 
+        currentLang={currentLang} 
+        isTransparent={focusedIndex === 2} 
+      />
     </main>
   );
 }

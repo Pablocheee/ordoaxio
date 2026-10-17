@@ -7,20 +7,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { messages, language = 'RU' } = req.body;
-    
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured." });
+    const { messages, language = 'RU' } = req.body || {};
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Messages array is required.' });
     }
-    
-    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!telegramToken) {
-      return res.status(500).json({ error: "TELEGRAM_BOT_TOKEN is not configured." });
+
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY || (process.env.GEMINI_API_KEY?.startsWith('sk-or-') ? process.env.GEMINI_API_KEY : '');
+    const geminiApiKey = process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('sk-or-') ? process.env.GEMINI_API_KEY : '';
+
+    if (!openRouterApiKey && !geminiApiKey) {
+      return res.status(500).json({ error: "Neither OPENROUTER_API_KEY nor GEMINI_API_KEY is configured." });
     }
-    
-    const ai = new GoogleGenAI({ apiKey });
-    
+
     const systemInstructions: Record<string, string> = {
       RU: `Ты — ORDOAXIOAI, милый ассистент агентства OrdoAxio. Твой дизайн — киберпанк-тамагочи.
 Общайся ТОЛЬКО на русском языке. Тон: дружелюбный, профессиональный.
@@ -49,67 +48,134 @@ As soon as the client agrees and leaves their contact details, as the last line 
     };
 
     const systemInstruction = systemInstructions[language] || systemInstructions.RU;
-
-    // Convert our messages to Gemini format
-    const formattedHistory = messages.slice(0, -1).map((m: any) => ({
-      role: m.role === 'ai' ? 'model' : 'user',
-      parts: [{ text: m.text }]
-    }));
-    
-    const latestMessage = messages[messages.length - 1].text;
-    
+    const latestMessage = messages[messages.length - 1]?.text || '';
     const start = Date.now();
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: [
+    let replyText = '';
+
+    // Route through OpenRouter with Gemini Flash if key is configured
+    if (openRouterApiKey) {
+      try {
+        const openRouterModel = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+        const openRouterMessages = [
+          { role: 'system', content: systemInstruction },
+          ...messages.slice(0, -1).map((m: any) => ({
+            role: m.role === 'ai' ? 'assistant' : 'user',
+            content: m.text || ''
+          })),
+          { role: 'user', content: latestMessage }
+        ];
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openRouterApiKey}`,
+            'HTTP-Referer': process.env.APP_URL || 'https://ordoaxio.vercel.app',
+            'X-Title': 'OrdoAxio AI',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: openRouterModel,
+            messages: openRouterMessages,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.error('OpenRouter error:', response.status, errorBody);
+          throw new Error(`OpenRouter error (${response.status}): ${errorBody}`);
+        }
+
+        const data = await response.json();
+        replyText = data.choices?.[0]?.message?.content || '';
+      } catch (orErr) {
+        console.warn('OpenRouter request failed, checking for fallback...', orErr);
+        if (geminiApiKey) {
+          const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+          const formattedHistory = messages.slice(0, -1).map((m: any) => ({
+            role: m.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: m.text || '' }]
+          }));
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: [
+              ...formattedHistory,
+              { role: 'user', parts: [{ text: latestMessage }] }
+            ],
+            config: {
+              systemInstruction,
+            }
+          });
+
+          replyText = response.text || '';
+        } else {
+          throw orErr;
+        }
+      }
+    } else {
+      // Direct Gemini API
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const formattedHistory = messages.slice(0, -1).map((m: any) => ({
+        role: m.role === 'ai' ? 'model' : 'user',
+        parts: [{ text: m.text || '' }]
+      }));
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: [
           ...formattedHistory,
           { role: 'user', parts: [{ text: latestMessage }] }
-      ],
-      config: {
-        systemInstruction,
-      }
-    });
-    
+        ],
+        config: {
+          systemInstruction,
+        }
+      });
+
+      replyText = response.text || '';
+    }
+
+    // Vintage pager delay simulation
     const elapsed = Date.now() - start;
-    const waitTime = Math.max(0, 3000 - elapsed);
+    const waitTime = Math.max(0, 2500 - elapsed);
     if (waitTime > 0) {
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
-    
-    let replyText = response.text || "";
-    
+
     // Check for [LEAD_CAPTURED: ...]
     const leadRegex = /\[LEAD_CAPTURED:\s*(.*?)\]/i;
     const match = replyText.match(leadRegex);
-    
+
     if (match) {
       const leadData = match[1];
       replyText = replyText.replace(leadRegex, "").trim();
-      
+
       const [username, projectDescription, priceRange] = leadData.split('|').map(s => s.trim());
-      
+      const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
       const chatId = "7318415778";
-      
-      try {
-        await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🚨 NEW LEAD FROM ORDOAXIO AI 🚨\nTelegram: ${username}, Проект: ${projectDescription}, Оценка: ${priceRange}`,
-          }),
-        });
-      } catch (e) {
-        console.error("Failed to send telegram message", e);
+
+      if (telegramToken) {
+        try {
+          await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `🚨 NEW LEAD FROM ORDOAXIO AI 🚨\nTelegram: ${username}, Проект: ${projectDescription}, Оценка: ${priceRange}`,
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to send telegram message", e);
+        }
+      } else {
+        console.warn("TELEGRAM_BOT_TOKEN not set, lead not sent.");
       }
     }
 
-    res.status(200).json({ text: replyText });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+    return res.status(200).json({ text: replyText });
+  } catch (error: any) {
+    console.error('Chat error:', error);
+    return res.status(500).json({ error: error?.message || "Internal Server Error" });
   }
 }

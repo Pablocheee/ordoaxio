@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const screenTranslations = {
   RU: {
@@ -15,11 +15,23 @@ const screenTranslations = {
 
 type ScreenLang = keyof typeof screenTranslations;
 
-export function OrdoAxioAi({ currentLang, isGlitching }: { currentLang: string; isGlitching?: boolean }) {
+export function OrdoAxioAi({ 
+  currentLang, 
+  isTransparent = false 
+}: { 
+  currentLang: string; 
+  isTransparent?: boolean;
+}) {
   const [isVisible, setIsVisible] = useState(false);
+  const isVisibleRef = useRef(isVisible);
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [blink, setBlink] = useState(false);
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragOffsetRef = useRef(0);
+  const isDraggingRef = useRef(false);
   
   // Typing effect states
   const [textToType, setTextToType] = useState('');
@@ -28,38 +40,189 @@ export function OrdoAxioAi({ currentLang, isGlitching }: { currentLang: string; 
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   
+  useEffect(() => {
+    isVisibleRef.current = isVisible;
+  }, [isVisible]);
+
+  // Tamagotchi eye blink animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setBlink(true);
+      setTimeout(() => setBlink(false), 220);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ASCII Faces
-  const faceIdle = '/\\_/\\\n( o.o )';
+  const faceIdle = blink ? '/\\_/\\\n( -.- )' : '/\\_/\\\n( o.o )';
   const faceTyping = '/\\_/\\\n( >.< )';
 
   useEffect(() => {
-    // Reveal component on scroll down (wheel or touch swipe)
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY > 30) setIsVisible(true);
-      if (e.deltaY < -30) setIsVisible(false);
+    let isLocked = false;
+    let lockTimeout: NodeJS.Timeout | null = null;
+
+    const lockTransition = () => {
+      isLocked = true;
+      if (lockTimeout) clearTimeout(lockTimeout);
+      lockTimeout = setTimeout(() => {
+        isLocked = false;
+      }, 550);
     };
 
+    // Wheel handling (mouse wheel & trackpad momentum)
+    const handleWheel = (e: WheelEvent) => {
+      if (isLocked) return;
+
+      const isMobile = window.innerWidth < 768;
+
+      if (!isVisibleRef.current) {
+        // On mobile, never open by background scroll events
+        if (isMobile) return;
+
+        // When closed: any deliberate scroll opens it cleanly on desktop
+        if (Math.abs(e.deltaY) > 20) {
+          setIsVisible(true);
+          lockTransition();
+        }
+      } else {
+        // When open: scrolling down over ANY part of the chat closes it
+        if (e.deltaY > 20) {
+          setIsVisible(false);
+          lockTransition();
+        }
+      }
+    };
+
+    // Touch swipe handling
     let touchStartY = 0;
+    let touchStartX = 0;
+    let touchOnPager = false;
+    let gestureHandled = false;
+
     const handleTouchStart = (e: TouchEvent) => {
       touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+      const target = e.target as HTMLElement | null;
+      touchOnPager = !!target?.closest('.tamagotchi-pager');
+      gestureHandled = false;
     };
     
     const handleTouchMove = (e: TouchEvent) => {
-      if (!touchStartY) return;
-      const touchEndY = e.touches[0].clientY;
-      const diff = touchStartY - touchEndY;
-      if (diff > 40) setIsVisible(true);
-      if (diff < -40) setIsVisible(false);
+      if (!touchStartY || isLocked) return;
+
+      const currentY = e.touches[0].clientY;
+      const currentX = e.touches[0].clientX;
+      const deltaY = currentY - touchStartY; // positive = swipe DOWN, negative = swipe UP
+      const deltaX = Math.abs(currentX - touchStartX);
+
+      // Require primarily vertical gesture
+      if (Math.abs(deltaY) < deltaX * 1.2) return;
+
+      const isMobile = window.innerWidth < 768;
+
+      if (isMobile) {
+        // Mobile version: interactive dragging on the pager itself
+        if (!touchOnPager) return;
+
+        if (!isVisibleRef.current) {
+          // While closed: pulling UP (deltaY < 0) pulls the pager out in real time!
+          if (deltaY < 0) {
+            if (e.cancelable) e.preventDefault();
+            const clamped = Math.max(-260, deltaY);
+            dragOffsetRef.current = clamped;
+            setDragOffset(clamped);
+            if (!isDraggingRef.current) {
+              isDraggingRef.current = true;
+              setIsDragging(true);
+            }
+          }
+        } else {
+          // While open: pulling DOWN (deltaY > 0) pulls the pager down in real time!
+          if (deltaY > 0) {
+            const target = e.target as HTMLElement | null;
+            const chatMessages = target?.closest('.chat-messages') as HTMLElement | null;
+            if (!chatMessages || chatMessages.scrollTop <= 0) {
+              if (e.cancelable) e.preventDefault();
+              const clamped = Math.min(260, deltaY);
+              dragOffsetRef.current = clamped;
+              setDragOffset(clamped);
+              if (!isDraggingRef.current) {
+                isDraggingRef.current = true;
+                setIsDragging(true);
+              }
+            }
+          }
+        }
+      } else {
+        // Desktop behavior unchanged
+        if (!isVisibleRef.current) {
+          if (Math.abs(deltaY) > 30 && !gestureHandled) {
+            gestureHandled = true;
+            setIsVisible(true);
+            lockTransition();
+          }
+        } else {
+          if (deltaY > 30 && !gestureHandled) {
+            gestureHandled = true;
+            setIsVisible(false);
+            lockTransition();
+          }
+        }
+      }
     };
 
-    window.addEventListener('wheel', handleWheel);
-    window.addEventListener('touchstart', handleTouchStart);
-    window.addEventListener('touchmove', handleTouchMove);
+    const handleTouchEnd = () => {
+      const isMobile = window.innerWidth < 768;
+
+      if (isMobile && touchOnPager && isDraggingRef.current) {
+        const offset = dragOffsetRef.current;
+        if (!isVisibleRef.current) {
+          // If pulled up by more than 40px, snap open!
+          if (offset < -40) {
+            setIsVisible(true);
+            lockTransition();
+          }
+        } else {
+          // If pulled down by more than 40px, snap closed!
+          if (offset > 40) {
+            setIsVisible(false);
+            lockTransition();
+          }
+        }
+      }
+
+      touchStartY = 0;
+      touchOnPager = false;
+      gestureHandled = false;
+      dragOffsetRef.current = 0;
+      isDraggingRef.current = false;
+      setDragOffset(0);
+      setIsDragging(false);
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!isVisibleRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-lang-toggle]') || target?.closest('.tamagotchi-pager')) {
+        return;
+      }
+      setIsVisible(false);
+      lockTransition();
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('mousedown', handleClickOutside);
     
     return () => {
+      if (lockTimeout) clearTimeout(lockTimeout);
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -131,43 +294,66 @@ export function OrdoAxioAi({ currentLang, isGlitching }: { currentLang: string; 
 
   return (
     <div 
-      className={`fixed bottom-6 right-6 z-[100] transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-        isVisible ? 'translate-y-0 opacity-100' : 'translate-y-24 opacity-0 pointer-events-none'
+      onClick={() => {
+        if (!isVisible && !isDragging) {
+          setIsVisible(true);
+        }
+      }}
+      style={{
+        transform: isDragging && dragOffset !== 0
+          ? isVisible
+            ? `translateY(calc(-20px + ${dragOffset}px))`
+            : `translateY(calc(100% - 58px + ${dragOffset}px))`
+          : undefined,
+        transition: isDragging ? 'none' : undefined,
+      }}
+      className={`tamagotchi-pager fixed bottom-0 right-4 sm:right-8 z-[1000] ${
+        isDragging ? '' : 'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'
+      } ${
+        isTransparent 
+          ? 'opacity-15 hover:opacity-100 pointer-events-auto cursor-pointer' 
+          : 'opacity-100'
+      } ${
+        isVisible 
+          ? 'translate-y-[-20px] sm:translate-y-[-24px]' 
+          : 'translate-y-[calc(100%-58px)] cursor-pointer'
       }`}
     >
       {/* Tamagotchi / Pager Casing */}
-      <div className="w-72 sm:w-80 bg-zinc-900 border-[3px] border-zinc-800 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.8),inset_0_1px_2px_rgba(255,255,255,0.1)] flex flex-col gap-4 font-mono relative">
-        
+      <div 
+        className={`w-72 sm:w-80 bg-zinc-900 border-[3px] border-zinc-800 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.8),inset_0_1px_2px_rgba(255,255,255,0.1)] flex flex-col gap-4 font-mono relative ${
+          !isVisible ? 'cursor-pointer hover:border-cyan-700/60 transition-colors' : ''
+        }`}
+      >
         {/* Antenna decoration */}
-        <div className="absolute -top-[3px] right-6 -translate-y-full flex flex-col items-center">
+        <div className="absolute -top-[3px] right-6 -translate-y-full flex flex-col items-center pointer-events-none">
           <div className="w-2 h-6 bg-zinc-800 rounded-t-full border-x border-t border-zinc-700 -mb-px" />
           <div className="w-6 h-3 bg-zinc-800 rounded-t-md border-x border-t border-zinc-700" />
         </div>
         
         {/* LCD Screen */}
-        <div className={`bg-[#051008] border-4 border-zinc-950 rounded-xl p-3 h-56 flex flex-col relative overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] ${isGlitching ? 'lcd-interference' : ''}`}>
-          <style>{`
-            @keyframes lcdInterference {
-              0%, 100% { transform: translate(0, 0); filter: contrast(1) brightness(1) invert(0); }
-              20% { transform: translate(-2px, 1px); filter: contrast(1.5) brightness(1.2) invert(0.1); }
-              40% { transform: translate(2px, -1px); filter: contrast(0.8) brightness(0.8) invert(0); }
-              60% { transform: translate(-1px, -2px); filter: contrast(1.2) brightness(1.5) invert(0.2); }
-              80% { transform: translate(1px, 2px); filter: contrast(1.1) brightness(0.9) invert(0); }
-            }
-            .lcd-interference {
-              animation: lcdInterference 0.1s steps(2, end) infinite;
-            }
-          `}</style>
+        <div className="bg-[#051008] border-4 border-zinc-950 rounded-xl p-3 h-56 flex flex-col relative overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
           {/* CRT Scanline overlay */}
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] opacity-20 z-10" />
           
           {/* AI Face Header */}
-          <div className="text-cyan-500/80 whitespace-pre text-center text-xs leading-tight mb-3 transition-all duration-200">
+          <div 
+            onClick={(e) => {
+              if (isVisible) {
+                e.stopPropagation();
+                setIsVisible(false);
+              }
+            }}
+            className={`text-cyan-500/80 whitespace-pre text-center text-xs leading-tight mb-3 transition-all duration-200 select-none ${
+              isVisible ? 'cursor-pointer hover:text-cyan-300' : ''
+            }`}
+            title={isVisible ? (currentLang === 'RU' ? 'Нажмите или смахните вниз, чтобы свернуть' : 'Click or swipe down to minimize') : undefined}
+          >
             {isTyping ? faceTyping : faceIdle}
           </div>
           
           {/* Chat Area */}
-          <div className="flex-1 overflow-y-auto flex flex-col gap-2 text-[10px] sm:text-xs z-20 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className={`chat-messages flex-1 overflow-y-auto flex flex-col gap-2 text-[10px] sm:text-xs z-20 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'}`}>
             <div className="text-green-500/90 self-start text-left drop-shadow-[0_0_5px_rgba(34,197,94,0.4)] max-w-[90%] break-words leading-snug whitespace-pre-wrap">
               {screenTranslations[currentLang as ScreenLang]?.part1}
             </div>
@@ -198,7 +384,7 @@ export function OrdoAxioAi({ currentLang, isGlitching }: { currentLang: string; 
         </div>
 
         {/* Input Form */}
-        <form onSubmit={handleSend} className="flex gap-2">
+        <form onSubmit={handleSend} className={`flex gap-2 transition-opacity duration-300 ${!isVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <input 
             type="text" 
             value={inputValue}

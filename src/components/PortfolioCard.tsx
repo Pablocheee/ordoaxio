@@ -1,7 +1,9 @@
+import type React from 'react';
 import { useState } from 'react';
 import { motion } from 'motion/react';
 
 interface PortfolioCardProps {
+  key?: React.Key;
   title: string;
   description: string;
   link: string;
