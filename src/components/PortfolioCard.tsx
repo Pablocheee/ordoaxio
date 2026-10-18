@@ -11,11 +11,12 @@ interface PortfolioCardProps {
   bgImage: string;
   titleStyle: string;
   isFocused?: boolean;
+  currentLang?: string;
   onHover?: () => void;
   onLeave?: () => void;
 }
 
-export function PortfolioCard({ title, description, link, accentColor, bgImage, titleStyle, isFocused = false, onHover, onLeave }: PortfolioCardProps) {
+export function PortfolioCard({ title, description, link, accentColor, bgImage, titleStyle, isFocused = false, currentLang = 'RU', onHover, onLeave }: PortfolioCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const isActive = isHovered || isFocused;
 
@@ -29,11 +30,29 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
     onLeave?.();
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    // On mobile (< 768px):
+    // Tapping anywhere on the card area only expands/focuses it and NEVER opens the link
+    if (window.innerWidth < 768) {
+      e.preventDefault();
+      onHover?.();
+    }
+  };
+
+  const handleOpenButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.innerWidth < 768) {
+      e.preventDefault();
+      window.open(link, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
     <motion.a
       href={link}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={handleClick}
       className={`relative flex flex-col justify-between overflow-hidden bg-zinc-950 transition-all duration-200 ease-out cursor-pointer text-left min-h-0 w-full md:h-full -mt-[4px] first:mt-0 md:mt-0 md:-ml-[4px] md:first:ml-0 scale-x-[1.01] md:scale-x-[1.02] outline-none ${isActive ? 'z-50' : 'z-0'}`}
       style={{
         boxShadow: isActive ? `0 0 40px 10px ${accentColor}40` : 'none',
@@ -45,8 +64,6 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
       onMouseLeave={handleMouseLeave}
       onFocus={handleMouseEnter}
       onBlur={handleMouseLeave}
-      onTouchStart={handleMouseEnter}
-      onTouchEnd={handleMouseLeave}
     >
       {/* Background Image Container */}
       <div className="absolute inset-0 md:inset-[-25%] z-0 skew-x-0 md:skew-x-12 overflow-hidden pointer-events-none">
@@ -79,11 +96,27 @@ export function PortfolioCard({ title, description, link, accentColor, bgImage, 
           </div>
         </div>
           
-        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[70%] pl-2 md:pl-8 lg:pl-12 skew-x-0 md:-skew-x-12 origin-left">
+        <div className="mt-auto mb-1 md:mb-6 w-full md:max-w-[70%] pl-2 md:pl-8 lg:pl-12 skew-x-0 md:-skew-x-12 origin-left flex flex-col gap-2.5">
           <div className="transform-gpu backface-hidden antialiased will-change-transform w-[220px] md:w-[260px]" style={{ transform: 'translateZ(0)' }}>
             <p className="font-mono text-[11px] md:text-xs tracking-wide text-zinc-300 uppercase leading-snug line-clamp-3 md:line-clamp-none">
               {description}
             </p>
+          </div>
+
+          {/* "Открыть" / "Open" Button */}
+          <div className={`transition-all duration-300 ease-out ${isActive ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+            <button
+              type="button"
+              onClick={handleOpenButtonClick}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-100 border font-mono text-[11px] font-bold tracking-wider uppercase transition-all duration-200 active:scale-95 shadow-[0_2px_12px_rgba(0,0,0,0.6)] cursor-pointer"
+              style={{
+                borderColor: `${accentColor}90`,
+                boxShadow: isActive ? `0 0 15px ${accentColor}30` : undefined,
+              }}
+            >
+              <span>{currentLang === 'EN' ? 'OPEN' : 'ОТКРЫТЬ'}</span>
+              <span className="text-xs font-bold" style={{ color: accentColor }}>↗</span>
+            </button>
           </div>
         </div>
       </article>

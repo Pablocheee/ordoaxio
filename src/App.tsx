@@ -69,6 +69,16 @@ export default function App() {
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [currentLang, setCurrentLang] = useState('RU');
   const [isGlitching, setIsGlitching] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const updateMedia = () => {
+      setIsDesktop(window.innerWidth >= 768 && window.matchMedia('(hover: hover)').matches);
+    };
+    updateMedia();
+    window.addEventListener('resize', updateMedia);
+    return () => window.removeEventListener('resize', updateMedia);
+  }, []);
 
   const handleLanguageToggle = () => {
     setIsGlitching(true);
@@ -80,12 +90,12 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         setFocusedIndex((prev) => {
           if (prev === -1) return 0;
           return prev >= projects.length - 1 ? 0 : prev + 1;
         });
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         setFocusedIndex((prev) => {
           if (prev === -1) return projects.length - 1;
           return prev <= 0 ? projects.length - 1 : prev - 1;
@@ -95,8 +105,44 @@ export default function App() {
       }
     };
 
+    let touchStartY = 0;
+    let touchStartX = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.tamagotchi-pager') || target?.closest('header')) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!touchStartY) return;
+      const touchEndY = e.changedTouches[0].clientY;
+      const touchEndX = e.changedTouches[0].clientX;
+      const deltaY = touchEndY - touchStartY;
+      const deltaX = touchEndX - touchStartX;
+
+      if (Math.abs(deltaY) > 40 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        if (deltaY < 0) {
+          // Swipe up -> next project
+          setFocusedIndex((prev) => (prev >= projects.length - 1 ? 0 : prev + 1));
+        } else {
+          // Swipe down -> previous project
+          setFocusedIndex((prev) => (prev <= 0 ? projects.length - 1 : prev - 1));
+        }
+      }
+      touchStartY = 0;
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
   }, [focusedIndex]);
 
   return (
@@ -159,6 +205,7 @@ export default function App() {
                 title={langData.title}
                 description={langData.description}
                 isFocused={focusedIndex === i} 
+                currentLang={currentLang}
                 onHover={() => setFocusedIndex(i)} 
                 onLeave={() => setFocusedIndex(-1)} 
               />

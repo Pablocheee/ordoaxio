@@ -100,15 +100,24 @@ export function OrdoAxioAi({
     let gestureHandled = false;
 
     const handleTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input') || target?.closest('button') || target?.closest('form')) {
+        touchOnPager = false;
+        touchStartY = 0;
+        return;
+      }
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
-      const target = e.target as HTMLElement | null;
       touchOnPager = !!target?.closest('.tamagotchi-pager');
       gestureHandled = false;
     };
     
     const handleTouchMove = (e: TouchEvent) => {
-      if (!touchStartY || isLocked) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input') || target?.closest('button') || target?.closest('form')) {
+        return;
+      }
+      if (!touchStartY || isLocked || !touchOnPager) return;
 
       const currentY = e.touches[0].clientY;
       const currentX = e.touches[0].clientX;
@@ -260,11 +269,14 @@ export function OrdoAxioAi({
     return () => clearTimeout(timeoutId);
   }, [currentTypingText, textToType]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim()) return;
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!inputValue.trim() || isTyping) return;
     
-    const userMessage = inputValue;
+    const userMessage = inputValue.trim();
     const newMessages = [...messages, { role: 'user', text: userMessage }];
     
     setMessages(newMessages);
@@ -285,8 +297,9 @@ export function OrdoAxioAi({
       }
       
       const data = await response.json();
-      setTextToType(data.text.toUpperCase());
+      setTextToType(data.text ? data.text.toUpperCase() : 'OK');
     } catch (error) {
+      console.error('Chat error:', error);
       setMessages(prev => [...prev, { role: 'ai', text: 'ERROR: CONNECTION LOST. RETRYING...' }]);
       setIsTyping(false);
     }
@@ -308,7 +321,7 @@ export function OrdoAxioAi({
         transition: isDragging ? 'none' : undefined,
       }}
       className={`tamagotchi-pager fixed bottom-0 right-4 sm:right-8 z-[1000] ${
-        isDragging ? '' : 'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'
+        isDragging ? '' : 'transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'
       } ${
         isTransparent 
           ? 'opacity-15 hover:opacity-100 pointer-events-auto cursor-pointer' 
@@ -384,17 +397,22 @@ export function OrdoAxioAi({
         </div>
 
         {/* Input Form */}
-        <form onSubmit={handleSend} className={`flex gap-2 transition-opacity duration-300 ${!isVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <form 
+          onSubmit={handleSend}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          className={`flex gap-2 transition-opacity duration-300 relative z-30 ${!isVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        >
           <input 
             type="text" 
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="CMD_>"
-            className="flex-1 bg-zinc-950 border-2 border-zinc-800 rounded-lg px-3 py-2 text-xs text-green-500 font-bold focus:outline-none focus:border-cyan-700 transition-colors placeholder:text-zinc-700 shadow-inner"
+            className="flex-1 bg-zinc-950 border-2 border-zinc-800 rounded-lg px-3 py-2 text-xs text-green-500 font-bold focus:outline-none focus:border-cyan-700 transition-colors placeholder:text-zinc-700 shadow-inner select-text"
           />
           <button 
             type="submit"
-            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg border-2 border-zinc-700 hover:border-cyan-700 hover:text-cyan-400 transition-colors text-xs font-bold uppercase active:scale-95"
+            className="bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 text-zinc-300 px-4 py-2 rounded-lg border-2 border-zinc-700 hover:border-cyan-700 hover:text-cyan-400 transition-colors text-xs font-bold uppercase active:scale-95 cursor-pointer"
           >
             TX
           </button>
